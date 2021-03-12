@@ -1,6 +1,7 @@
 ﻿using System;
 using Confluent.Kafka;
-
+using Serilog;
+using System.Threading;
 
 namespace simpleConsumer
 {
@@ -11,7 +12,10 @@ namespace simpleConsumer
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var logger = new LoggerConfiguration()
+              .WriteTo.Console()
+              .CreateLogger();
+            logger.Information("Testando o consumo de mensagens com Kafka");
 
             var configConsumer = new ConsumerConfig
             {
@@ -26,19 +30,28 @@ namespace simpleConsumer
                 consumer.Subscribe(KafkaTopic);
 
                 // Handle Cancel Keypress 
-                var cancelled = false;
+                CancellationTokenSource cts = new CancellationTokenSource();
                 Console.CancelKeyPress += (_, e) =>
                 {
                     e.Cancel = true; // prevent the process from terminating.
-                    cancelled = true;
+                    cts.Cancel();
                 };
 
                 Console.WriteLine("Ctrl-C to exit.");
 
-                // Poll for messages
-                while (!cancelled)
+                try
+                {
+                    while (true)
+                    {
+                        var cr = consumer.Consume(cts.Token);
+                        logger.Information(
+                            $"Mensagem lida: {cr.Message.Value}");
+                    }
+                }
+                catch (OperationCanceledException)
                 {
                     consumer.Close();
+                    logger.Warning("Cancelada a execução do Consumer...");
                 }
 
             }
